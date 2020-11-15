@@ -26,3 +26,34 @@ def load_png(name):
         print(f"Cannot load image: {fullname}")
         raise SystemExit and message
     return image, image.get_rect()
+
+
+class Ball(pg.sprite.Sprite):
+    """A ball that will move across the screen
+    Returns: ball object
+    Functions: update, calcnewpos
+    Attributes: area, vector"""
+
+    def __init__(self, vector):
+        pg.sprite.Sprite.__init__(self)
+        self.image, self.rect = load_png("ball.png")
+        screen = pg.display.get_surface()
+        self.area = screen.get_rect()
+        self.vector = vector
+
+    def update(self):
+        newpos = self.calcnewpos(self.rect, self.vector)
+        self.rect = newpos
+
+    def calcnewpos(self, rect, vector):
+        (angle, z) = vector
+        (dx, dy) = (z*math.cos(angle), z*math.sin(angle))
+        return rect.move(dx, dy)
+
+
+def main():
+
+    ball = Ball()
+
+    while 1:
+        ball.update()
