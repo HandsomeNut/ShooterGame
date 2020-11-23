@@ -15,7 +15,7 @@ except ImportError as err:
 
 def load_png(name):
     """ Load image an return image object"""
-    fullname = os.path.join('data', name)
+    fullname = os.path.join('../data', name)
     try:
         image = pg.image.load(fullname)
         if image.get_alpha() is None:
@@ -34,16 +34,54 @@ class Ball(pg.sprite.Sprite):
     Functions: update, calcnewpos
     Attributes: area, vector"""
 
-    def __init__(self, vector):
+    def __init__(self, xy, vector):
         pg.sprite.Sprite.__init__(self)
         self.image, self.rect = load_png("ball.png")
         screen = pg.display.get_surface()
         self.area = screen.get_rect()
         self.vector = vector
+        self.hit = 0
 
     def update(self):
         newpos = self.calcnewpos(self.rect, self.vector)
         self.rect = newpos
+        (angle, z) = self.vector
+
+        if not self.area.contains(newpos):
+            tl = not self.area.collidepoint(newpos.topleft)
+            tr = not self.area.collidepoint(newpos.topright)
+            bl = not self.area.collidepoint(newpos.bottomleft)
+            br = not self.area.collidepoint(newpos.bottomright)
+            if tr and tl or (br and bl):
+                angle = -angle
+            if tl and bl:
+                # self.offcourt(player=2)
+                angle = math.pi - angle
+            if tr and br:
+                # self.offcourt(player=1)
+                angle = math.pi - angle
+
+        else:
+            # Deflate the rectangles so you can't catch a ball behind the bat
+            player1.rect.inflate(-3, -3)
+            player2.rect.inflate(-3, -3)
+
+            # Do ball and bat collide?
+            # Note I put in an odd rule that sets self.hit to 1 when they collide, and unsets it in the next
+            # iteration. this is to stop odd ball behaviour where it finds a collision *inside* the
+            # bat, the ball reverses, and is still inside the bat, so bounces around inside.
+            # This way, the ball can always escape and bounce away cleanly
+
+            if self.rect.colliderect(player1.rect) == 1 and not self.hit:
+                angle = math.pi - angle
+                self.hit = not self.hit
+            elif self.rect.colliderect(player2.rect) == 1 and not self.hit:
+                angle = math.pi - angle
+                self.hit = not self.hit
+            elif self.hit:
+                self.hit = not self.hit
+
+        self.vector = (angle, z)
 
     def calcnewpos(self, rect, vector):
         (angle, z) = vector
@@ -51,9 +89,114 @@ class Ball(pg.sprite.Sprite):
         return rect.move(dx, dy)
 
 
+class Bat(pg.sprite.Sprite):
+    """Movable tennis 'bat' with which one hits the ball
+    Returns: bat object
+    Functions: reinit, update, moveup, movedown
+    Attributes: which, speed"""
+
+    def __init__(self, side):
+        pg.sprite.Sprite.__init__(self)
+        self.image, self.rect = load_png("bat.png")
+        screen = pg.display.get_surface()
+        self.area = screen.get_rect()
+        self.side = side
+        self.speed = 10
+        self.state = "still"
+        self.reinit()
+
+    def reinit(self):
+        self.state = "still"
+        self.movepos = [0, 0]
+        if self.side == "left":
+            self.rect.midleft = self.area.midleft
+        elif self.side == "right":
+            self.rect.midright = self.area.midright
+
+    def update(self):
+        newpos = self.rect.move(self.movepos)
+        if self.area.contains(newpos):
+            self.rect = newpos
+        pg.event.pump()
+
+    def moveup(self):
+        self.movepos[1] = self.movepos[1] - (self.speed)
+        self.state = "moveup"
+
+    def movedown(self):
+        self.movepos[1] = self.movepos[1] + (self.speed)
+        self.state = "movedown"
+
+
 def main():
 
-    ball = Ball()
+    # Initialise Screen
+    pg.init()
+    screen = pg.display.set_mode((640, 480))
+    pg.display.set_caption("Ball game")
 
+    # Fill background
+    background = pg.Surface(screen.get_size())
+    background = background.convert()
+    background.fill((0, 0, 0))
+
+    # Initialise players
+    global player1
+    global player2
+    player1 = Bat("left")
+    player2 = Bat("right")
+
+    # Initialise ball
+    speed = 13
+    rand = ((0.1 * (random.randint(5, 8))))
+    ball = Ball((0, 0), (0.47, speed))
+
+    # Initialise sprites
+    playersprites = pg.sprite.RenderPlain((player1, player2))
+    ballsprite = pg.sprite.RenderPlain(ball)
+
+    # Blit everything to the screen
+    screen.blit(background, (0, 0))
+    pg.display.flip()
+
+    # Initialise clock
+    clock = pg.time.Clock()
+
+    # Event loop
     while 1:
-        ball.update()
+        # Make sure the game runs on no more than 60 FPS
+        clock.tick(60)
+
+        for event in pg.event.get():
+            if event.type == QUIT:
+                return
+            elif event.type == KEYDOWN:
+                if event.key == K_a:
+                    player1.moveup()
+                if event.key == K_y:
+                    player1.movedown()
+                if event.key == K_UP:
+                    player2.moveup()
+                if event.key == K_DOWN:
+                    player2.movedown()
+            elif event.type == KEYUP:
+                if event.key == K_a or K_z:
+                    player1.movepos = [0,0]
+                    player1.state = "still"
+                if event.key == K_UP or K_DOWN:
+                    player2.movepos = [0,0]
+                    player2.state = "still"
+
+        screen.blit(background, ball.rect, ball.rect)
+        screen.blit(background, player1.rect, player1.rect)
+        screen.blit(background, player2.rect, player2.rect)
+        ballsprite.update()
+        playersprites.update()
+        ballsprite.draw(screen)
+        playersprites.draw(screen)
+        pg.display.flip()
+
+
+
+if __name__ == "__main__":
+    main()
